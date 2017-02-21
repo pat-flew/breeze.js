@@ -20,7 +20,7 @@
         breeze = def();
     }
 
-})(this, function (global) {
+})(global, function (global) {
     "use strict"; 
     var breeze = {
         version: "1.6.2",
