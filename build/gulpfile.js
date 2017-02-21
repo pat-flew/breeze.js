@@ -13,8 +13,6 @@ var shell   = require('gulp-shell');
 var newer   = require('gulp-newer');
 var through = require('through');
 var eventStream = require('event-stream');
-var replace = require('gulp-replace');
-var handlebars = require('gulp-compile-handlebars');
  
 var srcDir = '../src/';
 var destDir = './';
@@ -39,14 +37,10 @@ gulp.task('copyBreezeExtns', function() {
       .pipe(gulp.dest(destDir + 'adapters')),
     // copy the external adapters
     gulp.src( mapPath(srcDir, [ 'breeze.*.*.js' ]))
-      .pipe(gulp.dest(destDir + 'adapters'))
-  );
-});
-
-gulp.task('dtsgen', function() {
-  return eventStream.concat(
-    buildTypescriptDefinition('breeze.d.ts', false),
-    buildTypescriptDefinition('index.d.ts', true)
+      .pipe(gulp.dest(destDir + 'adapters')),
+    // copy the typescript definitions
+    gulp.src( mapPath('../typescript/typescript/', [ 'breeze.d.ts' ]))
+      .pipe(gulp.dest(destDir + 'typings'))
   );
 });
 
@@ -94,7 +88,7 @@ gulp.task('intellisense', ['yuidoc'], function() {
   return gulp.src(''); // hack to allow gulp chaining.
 });
 
-gulp.task('default', ['minify', 'minify.base', 'copyBreezeExtns', 'copyForTests', 'yuidoc', 'intellisense', 'dtsgen'], function() {
+gulp.task('default', ['minify', 'minify.base', 'copyBreezeExtns', 'copyForTests', 'yuidoc', 'intellisense'], function() {
 
 });
 
@@ -119,17 +113,3 @@ function mapPath(dir, fileNames) {
   });
 };
 
-function buildTypescriptDefinition(filename, modules) {
-  var stream = gulp.src( mapPath('../typescript/', [ 'breeze.source.d.ts' ]))
-      .pipe(replace(/\/\/~/g, ''))
-      .pipe(handlebars({ modules: modules }));
-
-  if (modules) {
-    // Remove breeze prefix from all types
-    stream = stream.pipe(replace(/breeze\./g, ''));
-  }
-  
-  return stream
-    .pipe(rename(filename))
-    .pipe(gulp.dest(destDir + 'typings'));
-}

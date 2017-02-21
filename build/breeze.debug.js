@@ -1,10 +1,16 @@
 /*
- * Copyright 2012-2016 IdeaBlade, Inc.  All Rights Reserved.  
- * Use, reproduction, distribution, and modification of this code is subject to the terms and 
+ * Copyright 2012-2016 IdeaBlade, Inc.  All Rights Reserved.
+ * Use, reproduction, distribution, and modification of this code is subject to the terms and
  * conditions of the IdeaBlade Breeze license, available at http://www.breezejs.com/license
  *
  * Author: Jay Traband
  */
+
+//for commonjs
+if(breezeWindow) {
+  this.window = breezeWindow;
+}
+
 
 (function (global, definition) {
     var def = function(){ return definition(global); };
@@ -20,10 +26,10 @@
         breeze = def();
     }
 
-})(global, function (global) {
-    "use strict"; 
+})(this, function (global) {
+    "use strict";
     var breeze = {
-        version: "1.6.2",
+        version: "1.5.7",
         metadataVersion: "1.0.5"
     };
     ;/**
@@ -205,22 +211,14 @@ function __toJson(source, template, target) {
   return target;
 }
 
-// default replacer function for __toJSONSafe.  Excludes entityAspect and other internal properties
-function __safeReplacer(prop, val) {
-	if (prop === "entityAspect" || prop === "complexAspect" || prop === "entityType" || prop === "complexType"
-	|| prop === "constructor" || prop.charAt(0) === '_' || prop.charAt(0) === '$') return;
-	return val;
-}
-
 // safely perform toJSON logic on objects with cycles.
 function __toJSONSafe(obj, replacer) {
   if (obj !== Object(obj)) return obj; // primitive value
   if (obj._$visited) return undefined;
-  replacer = replacer || __safeReplacer;
   if (obj.toJSON) {
     var newObj = obj.toJSON();
     if (newObj !== Object(newObj)) return newObj; // primitive value
-    if (newObj !== obj) return __toJSONSafe(newObj, replacer);
+    if (newObj !== obj) return __toJSONSafe(newObj);
     // toJSON returned the object unchanged.
     obj = newObj;
   }
@@ -241,7 +239,7 @@ function __toJSONSafe(obj, replacer) {
         val = replacer(prop, val);
         if (val === undefined) continue;
       }
-      val = __toJSONSafe(val, replacer);
+      val = __toJSONSafe(val);
       if (val === undefined) continue;
       result[prop] = val;
     }
@@ -610,7 +608,7 @@ function __isPrimitive(obj) {
   if (obj == null) return false;
   // true for numbers, strings, booleans and null, false for objects
   if (obj != Object(obj)) return true;
-  return __isDate(obj);
+  return _isDate(obj);
 }
 
 // end of is Functions
@@ -639,15 +637,6 @@ function __formatString(string) {
   return string.replace(pattern, function (match, index) {
     return args[index];
   });
-}
-
-// Change text to title case with spaces, e.g. 'myPropertyName12' to 'My Property Name 12'
-// See http://stackoverflow.com/questions/7225407/convert-camelcasetext-to-camel-case-text
-var __camelEdges = /([A-Z](?=[A-Z][a-z])|[^A-Z](?=[A-Z])|[a-zA-Z](?=[^a-zA-Z]))/g;
-function __titleCaseSpace(text) {
-  text = text.replace(__camelEdges, '$1 ');
-  text = text.charAt(0).toUpperCase() + text.slice(1);
-  return text;
 }
 
 // end of string functions
@@ -706,12 +695,10 @@ core.isNumeric = __isNumeric;
 core.stringStartsWith = __stringStartsWith;
 core.stringEndsWith = __stringEndsWith;
 core.formatString = __formatString;
-core.titleCase = __titleCaseSpace;
 
 core.getPropertyDescriptor = __getPropDescriptor;
 
 core.toJSONSafe = __toJSONSafe;
-core.toJSONSafeReplacer = __safeReplacer;
 
 core.parent = breeze;
 breeze.core = core;
@@ -2145,8 +2132,8 @@ var Validator = (function () {
           return (core.stringStartsWith(v, "US"));
       };
       var countryValidator = new Validator("countryIsUS", valFn, {
-          displayName: "Country", 
-          messageTemplate: "'%displayName%' must start with 'US'" 
+          displayName: "Country",
+          messageTemplate: "'%displayName%' must start with 'US'"
       });
 
       // Now plug it into Breeze.
@@ -2414,8 +2401,8 @@ var Validator = (function () {
       Validator.messageTemplates.countryIsUS = "'%displayName%' must start with 'US'";
       // This will have a similar effect to this
       var countryValidator = new Validator("countryIsUS", valFn, {
-          displayName: "Country", 
-          messageTemplate: "'%displayName%' must start with 'US'" 
+          displayName: "Country",
+          messageTemplate: "'%displayName%' must start with 'US'"
       });
   @property messageTemplates {Object}
   @static
@@ -3079,7 +3066,7 @@ var ValidationError = (function () {
 
 breeze.Validator = Validator;
 breeze.ValidationError = ValidationError;
- 
+
 ;/**
 @module breeze
 **/
@@ -4260,7 +4247,7 @@ var EntityAspect = (function () {
 
   function removeFromRelationsCore(entity) {
     entity.entityType.navigationProperties.forEach(function (np) {
-      var inverseNp = np.getInverse();
+      var inverseNp = np.inverse;
       var npValue = entity.getProperty(np.name);
       if (np.isScalar) {
         if (npValue) {
@@ -4929,7 +4916,7 @@ breeze.EntityState = EntityState;
     var np = relationArray.navigationProperty;
     var addsInProcess = relationArray._addsInProcess;
 
-    var invNp = np.getInverse();
+    var invNp = np.inverse;
     var startIx = addsInProcess.length;
     try {
       adds.forEach(function (childEntity) {
@@ -4952,7 +4939,7 @@ breeze.EntityState = EntityState;
   }
 
   function processRemoves(relationArray, removes) {
-    var inp = relationArray.navigationProperty.getInverse();
+    var inp = relationArray.navigationProperty.inverse;
     if (inp) {
       removes.forEach(function (childEntity) {
         childEntity.setProperty(inp.name, null);
@@ -4964,7 +4951,7 @@ breeze.EntityState = EntityState;
     // don't allow dups in this array. - also prevents recursion
     var parentEntity = relationArray.parentEntity;
     var navProp = relationArray.navigationProperty;
-    var inverseProp = navProp.getInverse();
+    var inverseProp = navProp.inverse;
     var goodAdds;
     if (inverseProp) {
       goodAdds = adds.filter(function (a) {
@@ -4978,7 +4965,6 @@ breeze.EntityState = EntityState;
       // This occurs with a unidirectional 1->N relation ( where there is no n -> 1)
       // in this case we compare fks.
       var fkPropNames = navProp.invForeignKeyNames;
-      if (navProp.baseProperty && (!fkPropNames.length)) fkPropNames = navProp.baseProperty.invForeignKeyNames; // TODO climb hierarchy
       var keyProps = parentEntity.entityType.keyProperties;
       goodAdds = adds.filter(function (a) {
         if (relationArray._addsInProcess.indexOf(a) >= 0) {
@@ -5224,7 +5210,7 @@ function setDpValueSimple(context, rawAccessorFn) {
     // but won't handle product.productId => orderDetail.productId because product
     // doesn't have an orderDetails property.
     entityType.navigationProperties.forEach(function (np) {
-      var inverseNp = np.getInverse();
+      var inverseNp = np.inverse;
       var fkNames = inverseNp ? inverseNp.foreignKeyNames : np.invForeignKeyNames;
 
       if (fkNames.length === 0) return;
@@ -5298,7 +5284,7 @@ function setNpValue(context, rawAccessorFn) {
   }
 
   var entityManager = entityAspect.entityManager;
-  var inverseProp = property.getInverse();
+  var inverseProp = property.inverse;
 
   // manage attachment -
   if (newValue != null) {
@@ -6078,7 +6064,7 @@ breeze.DataType = DataType;
 **/
 
 var DataService = (function () {
-  
+
   /**
   A DataService instance is used to encapsulate the details of a single 'service'; this includes a serviceName, a dataService adapterInstance,
   and whether the service has server side metadata.
@@ -6127,7 +6113,7 @@ var DataService = (function () {
   };
   var proto = ctor.prototype;
   proto._$typeName = "DataService";
-  
+
   /**
   The serviceName for this DataService.
 
@@ -6182,7 +6168,7 @@ var DataService = (function () {
     var result = new DataService(this);
     return updateWithConfig(result, config);
   };
-  
+
   ctor.resolve = function (dataServices) {
     // final defaults
     dataServices.push({
@@ -6191,7 +6177,7 @@ var DataService = (function () {
     });
     var ds = new DataService(__resolveProperties(dataServices,
         ["serviceName", "adapterName", "uriBuilderName", "hasServerMetadata", "jsonResultsAdapter", "useJsonp"]));
-    
+
     if (!ds.serviceName) {
       throw new Error("Unable to resolve a 'serviceName' for this dataService");
     }
@@ -6200,7 +6186,7 @@ var DataService = (function () {
     ds.uriBuilder = ds.uriBuilder || __config.getAdapterInstance("uriBuilder", ds.uriBuilderName);
     return ds;
   };
-  
+
   function updateWithConfig(obj, config) {
     if (config) {
       assertConfig(config)
@@ -6217,7 +6203,7 @@ var DataService = (function () {
     }
     return obj;
   }
-  
+
   ctor._normalizeServiceName = function (serviceName) {
     serviceName = serviceName.trim();
     if (serviceName.substr(-1) !== "/") {
@@ -6226,7 +6212,7 @@ var DataService = (function () {
       return serviceName;
     }
   };
-  
+
   proto.toJSON = function () {
     // don't use default value here - because we want to be able to distinguish undefined props for inheritence purposes.
     return __toJson(this, {
@@ -6240,7 +6226,7 @@ var DataService = (function () {
       useJsonp: null
     });
   };
-  
+
   ctor.fromJSON = function (json) {
     json.jsonResultsAdapter = __config._fetchObject(JsonResultsAdapter, json.jsonResultsAdapter);
     return new DataService(json);
@@ -6266,7 +6252,7 @@ var DataService = (function () {
     }
     return url;
   };
-  
+
   return ctor;
 })();
 
@@ -6315,47 +6301,28 @@ var JsonResultsAdapter = (function () {
   @method <ctor> JsonResultsAdapter
   @param config {Object}
   @param config.name {String} The name of this adapter.  This name is used to uniquely identify and locate this instance when an 'exported' JsonResultsAdapter is later imported.
-  @param [config.extractResults] {Function} Called once per query operation to extract the 'payload' from any json received over the wire.
+  @param [config.extractResults] {Function} Called once per service operation to extract the 'payload' from any json received over the wire.
   This method has a default implementation which to simply return the "results" property from any json returned as a result of executing the query.
-  @param [config.extractSaveResults] {Function} Called once per save operation to extract the entities from any json received over the wire.  Must return an array.
-  This method has a default implementation which to simply return the "entities" property from any json returned as a result of executing the save.
-  @param [config.extractKeyMappings] {Function} Called once per save operation to extract the key mappings from any json received over the wire.  Must return an array.
-  This method has a default implementation which to simply return the "keyMappings" property from any json returned as a result of executing the save.
   @param config.visitNode {Function} A visitor method that will be called on each node of the returned payload.
   **/
   var ctor = function JsonResultsAdapter(config) {
     if (arguments.length !== 1) {
       throw new Error("The JsonResultsAdapter ctor should be called with a single argument that is a configuration object.");
     }
-    
+
     assertConfig(config)
         .whereParam("name").isNonEmptyString()
         .whereParam("extractResults").isFunction().isOptional().withDefault(extractResultsDefault)
-        .whereParam("extractSaveResults").isFunction().isOptional().withDefault(extractSaveResultsDefault)
-        .whereParam("extractKeyMappings").isFunction().isOptional().withDefault(extractKeyMappingsDefault)
-        .whereParam("extractDeletedKeys").isFunction().isOptional().withDefault(extractDeletedKeysDefault)
         .whereParam("visitNode").isFunction()
         .applyAll(this);
     __config._storeObject(this, proto._$typeName, this.name);
   };
-  
+
   var proto = ctor.prototype;
   proto._$typeName = "JsonResultsAdapter";
-  
+
   function extractResultsDefault(data) {
     return data.results;
-  }
-
-  function extractSaveResultsDefault(data) {
-    return data.entities || data.Entities || [];
-  }
-  
-  function extractKeyMappingsDefault(data) {
-    return data.keyMappings || data.KeyMappings || [];
-  }
-
-  function extractDeletedKeysDefault(data) {
-    return data.deletedKeys || data.DeletedKeys || [];
   }
 
   return ctor;
@@ -6397,7 +6364,7 @@ if (!Q) {
 breeze.config.setQ = function (q) {
   breeze.Q = Q = q;
 }
-breeze.Q = Q; // Todo: consider a "safer" way for apps to get breeze's Q. 
+breeze.Q = Q; // Todo: consider a "safer" way for apps to get breeze's Q.
 
 
 var MetadataStore = (function () {
@@ -6418,8 +6385,8 @@ var MetadataStore = (function () {
   The store can then be associated with an EntityManager
   @example
       var entityManager = new EntityManager( {
-          serviceName: "breeze/NorthwindIBModel", 
-          metadataStore: ms 
+          serviceName: "breeze/NorthwindIBModel",
+          metadataStore: ms
       });
   or for an existing EntityManager
   @example
@@ -6859,13 +6826,6 @@ var MetadataStore = (function () {
 
     var qualifiedTypeName = getQualifiedTypeName(this, structuralTypeName, false);
     var typeName = qualifiedTypeName || structuralTypeName;
-
-    if (aCtor) {
-      if (aCtor._$typeName && aCtor._$typeName != typeName) {
-        console.warn("Registering a constructor for " + typeName + " that is already used for " + aCtor._$typeName + ".");
-      }
-      aCtor._$typeName = typeName;
-    }
 
     this._ctorRegistry[typeName] = { ctor: aCtor, initFn: initFn, noTrackingFn: noTrackingFn };
     if (qualifiedTypeName) {
@@ -7474,7 +7434,7 @@ var CsdlMetadataParser = (function () {
       return schema.namespace === assocNamespace;
     });
     if (!assocSchema) return null;
-    
+
     var assocName = assocFullName.shortTypeName;
     var assocs = assocSchema.association;
     if (!assocs) return null;
@@ -7805,21 +7765,7 @@ var EntityType = (function () {
     assertParam(property, "property").isInstanceOf(DataProperty).or().isInstanceOf(NavigationProperty).check();
 
     // true is 2nd arg to force resolve of any navigation properties.
-    var newprop = this._addPropertyCore(property, true);
-
-    if (this.subtypes && this.subtypes.length) {
-      var stype = this;
-      stype.getSelfAndSubtypes().forEach(function (st) {
-        if (st !== stype) {
-          if (property.isNavigationProperty) {
-            st._addPropertyCore(new NavigationProperty(property), true);
-          } else {
-            st._addPropertyCore(new DataProperty(property), true);
-          }
-        }
-      });
-    }
-    return newprop;
+    return this._addPropertyCore(property, true);
   };
 
   proto._updateFromBase = function (baseEntityType) {
@@ -8005,6 +7951,9 @@ var EntityType = (function () {
     this.initFn = r.initFn;
     this.noTrackingFn = r.noTrackingFn;
 
+    if (aCtor.prototype._$typeName && aCtor.prototype._$typeName != this.name) {
+      console.warn("Registering a constructor for " + this.name + " that is already used for " + aCtor.prototype._$typeName + ".");
+    }
     aCtor.prototype._$typeName = this.name;
     this._setCtor(aCtor);
     return aCtor;
@@ -8496,7 +8445,7 @@ var EntityType = (function () {
           isUnmapped: true
         });
         newProp.isSettable = __isSettable(instance, pn);
-        if (stype.subtypes && stype.subtypes.length) {
+        if (stype.subtypes) {
           stype.getSelfAndSubtypes().forEach(function (st) {
             st._addPropertyCore(new DataProperty(newProp));
           });
@@ -8641,7 +8590,7 @@ var ComplexType = (function () {
   @method createInstance
   @param initialValues {Object} Configuration object containing initial values for the instance.
   **/
-  // This method is actually the EntityType.createEntity method renamed 
+  // This method is actually the EntityType.createEntity method renamed
   proto._createInstanceCore = function (parent, parentProperty) {
     var aCtor = this.getCtor();
     var instance = new aCtor();
@@ -8850,20 +8799,6 @@ var DataProperty = (function () {
   @property name {String}
   **/
 
-  /**
-  The display name of this property
-
-  __readOnly__
-  @property displayName {String} 
-  **/
-  
-  /**
-  The name of this property on the server
-
-  __readOnly__
-  @property nameOnServer {String} 
-  **/
-  
   /**
   The parent type that this property belongs to - will be either a {{#crossLink "EntityType"}}{{/crossLink}} or a {{#crossLink "ComplexType"}}{{/crossLink}}.
 
@@ -9162,20 +9097,6 @@ var NavigationProperty = (function () {
   **/
 
   /**
-  The display name of this property
-
-  __readOnly__
-  @property displayName {String} 
-  **/
-  
-  /**
-  The name of this property on the server
-
-  __readOnly__
-  @property nameOnServer {String} 
-  **/
-  
-  /**
   The {{#crossLink "EntityType"}}{{/crossLink}} returned by this property.
 
   __readOnly__
@@ -9299,14 +9220,6 @@ var NavigationProperty = (function () {
     }
 
   };
-
-  proto.getInverse = function() {
-    var np = this;
-    while(!np.inverse && np.baseProperty) {
-      np = np.baseProperty;
-    }
-    return np.inverse;
-  }
 
   proto.setInverse = function (inverseNp) {
     var invNp;
@@ -9769,7 +9682,7 @@ var LocalQueryComparisonOptions = (function () {
   var proto = ctor.prototype;
   proto._$typeName = "LocalQueryComparisonOptions";
 
-  
+
   /**
   Case insensitive SQL compliant options - this is also the default unless otherwise changed.
   @property caseInsensitiveSQL {LocalQueryComparisonOptions}
@@ -9837,7 +9750,7 @@ var NamingConvention = (function () {
           },
           clientPropertyNameToServer: function(clientPropertyName) {
               return clientPropertyName.substr(0, 1).toUpperCase() + clientPropertyName.substr(1);
-          }            
+          }
       });
       var ms = new MetadataStore({ namingConvention: namingConv });
       var em = new EntityManager( { metadataStore: ms });
@@ -9927,7 +9840,7 @@ var NamingConvention = (function () {
           },
           clientPropertyNameToServer: function(clientPropertyName) {
               return clientPropertyName.substr(0, 1).toUpperCase() + clientPropertyName.substr(1);
-          }            
+          }
       });
       namingConv.setAsDefault();
   @chainable
@@ -9943,7 +9856,7 @@ breeze.NamingConvention = NamingConvention;
 
 
 ;var Predicate = (function () {
-  
+
   var Predicate = (function () {
     /**
     Used to define a 'where' predicate for an EntityQuery.  Predicates are immutable, which means that any
@@ -9955,7 +9868,7 @@ breeze.NamingConvention = NamingConvention;
     Predicate constructor
     @example
         var p1 = new Predicate("CompanyName", "StartsWith", "B");
-        var query = new EntityQuery("Customers").where(p1); 
+        var query = new EntityQuery("Customers").where(p1);
     or
     @example
         var p2 = new Predicate("Region", FilterQueryOp.Equals, null);
@@ -10004,15 +9917,15 @@ breeze.NamingConvention = NamingConvention;
       }
     };
     var proto = ctor.prototype;
-    
+
     /**
     Same as using the ctor.
     @example
-        // so 
+        // so
         var p = Predicate.create(a, b, c);
-        // is the same as 
-        var p = new Predicate(a, b, c); 
-    
+        // is the same as
+        var p = new Predicate(a, b, c);
+
     @method create
     @param property {String} A property name, a nested property name or an expression involving a property name.
     @param operator {FilterQueryOp|String}
@@ -10026,7 +9939,7 @@ breeze.NamingConvention = NamingConvention;
     @static
     **/
     ctor.create = ctor;
-    
+
     /**
     Creates a 'composite' Predicate by 'and'ing a set of specified Predicates together.
     @example
@@ -10048,7 +9961,7 @@ breeze.NamingConvention = NamingConvention;
       // return undefined if empty
       return pred.op && pred;
     };
-    
+
     /**
     Creates a 'composite' Predicate by 'or'ing a set of specified Predicates together.
     @example
@@ -10069,7 +9982,7 @@ breeze.NamingConvention = NamingConvention;
       var pred = new AndOrPredicate("or", __arraySlice(arguments));
       return pred.op && pred;
     };
-    
+
     /**
     Creates a 'composite' Predicate by 'negating' a specified predicate.
     @example
@@ -10132,7 +10045,7 @@ breeze.NamingConvention = NamingConvention;
     proto.and = function () {
       return new AndOrPredicate("and", argsForAndOrPredicates(this, arguments));
     };
-    
+
     /**
     'Or's this Predicate with one or more other Predicates and returns a new 'composite' Predicate
     @example
@@ -10155,7 +10068,7 @@ breeze.NamingConvention = NamingConvention;
     proto.or = function () {
       return new AndOrPredicate("or", argsForAndOrPredicates(this, arguments));
     };
-    
+
     /**
     Returns the 'negated' version of this Predicate
     @example
@@ -10173,7 +10086,7 @@ breeze.NamingConvention = NamingConvention;
     proto.not = function () {
       return new UnaryPredicate("not", this);
     };
-    
+
     //
     proto.toJSON = function () {
       // toJSON ( part of js standard - takes a single parameter
@@ -10243,7 +10156,7 @@ breeze.NamingConvention = NamingConvention;
       }
       return [obj].concat(preds);
     }
-    
+
     function updateAliasMap(aliasMap, op, config) {
       var key = op.toLowerCase();
       config.key = key;
@@ -10253,7 +10166,7 @@ breeze.NamingConvention = NamingConvention;
         aliasMap[alias.toLowerCase()] = config;
       });
     }
-    
+
     proto._resolveOp = function (op, okIfNotFound) {
       op = op.operator || op;
       var result = this.aliasMap[op.toLowerCase()];
@@ -10262,7 +10175,7 @@ breeze.NamingConvention = NamingConvention;
       }
       return result;
     };
-    
+
     function createPredicateFromArray(arr) {
       // TODO: assert that length of the array should be > 3
       // Needs to handle:
@@ -10282,10 +10195,10 @@ breeze.NamingConvention = NamingConvention;
       }
       return createPredicateFromObject(json);
     };
-    
+
     function createPredicateFromObject(obj) {
       if (obj instanceof Predicate) return obj;
-      
+
       if (typeof obj != 'object') {
         throw new Error("Unable to convert to a Predicate: " + obj);
       }
@@ -10295,13 +10208,13 @@ breeze.NamingConvention = NamingConvention;
       });
       return (preds.length === 1) ? preds[0] : new AndOrPredicate("and", preds);
     }
-    
+
     function createPredicateFromKeyValue(key, value) {
       // { and: [a,b] } key='and', value = [a,b]
       if (AndOrPredicate.prototype._resolveOp(key, true)) {
         return new AndOrPredicate(key, value);
       }
-      
+
       // { not: a }  key= 'not', value = a
       if (UnaryPredicate.prototype._resolveOp(key, true)) {
         return new UnaryPredicate(key, value);
@@ -10314,20 +10227,20 @@ breeze.NamingConvention = NamingConvention;
         // { foo: { value: bar, dataType: xxx} } key='foo', value = bar ( where bar is an object representing a literal
         return new BinaryPredicate("eq", key, value);
       }
-      
+
       if (Array.isArray(value)) {
         throw new Error("Unable to resolve predicate after the phrase: " + key);
       }
-      
+
       var expr = key;
       var keys = Object.keys(value);
       var preds = keys.map(function (op) {
-        
+
         // { a: { any: b } op = 'any', expr=a, value[op] = b
         if (AnyAllPredicate.prototype._resolveOp(op, true)) {
           return new AnyAllPredicate(op, expr, value[op]);
         }
-        
+
         if (BinaryPredicate.prototype._resolveOp(op, true)) {
           // { a: { ">": b }} op = ">", expr=a, value[op] = b
           return new BinaryPredicate(op, expr, value[op]);
@@ -10335,18 +10248,18 @@ breeze.NamingConvention = NamingConvention;
           // { a: { ">": { value: b, dataType: 'Int32' }} expr = a value[op] = { value: b, dataType: 'Int32' }
           return new BinaryPredicate("eq", expr, value[op]);
         }
-        
+
         var msg = __formatString("Unable to resolve predicate after the phrase: '%1' for operator: '%2'  and value: '%3'", expr, op, value[op]);
         throw new Error(msg);
 
       });
-      
+
       return (preds.length === 1) ? preds[0] : new AndOrPredicate("and", preds);
     }
 
     return ctor;
   })();
-  
+
   var PassthruPredicate = (function () {
     var ctor = function PassthruPredicate(value) {
       this.value = value;
@@ -10358,13 +10271,13 @@ breeze.NamingConvention = NamingConvention;
 
     return ctor;
   })();
-  
+
   var UnaryPredicate = (function () {
     var ctor = function UnaryPredicate(op, pred) {
       this.op = this._resolveOp(op);
       this.pred = Predicate(pred);
     };
-    
+
     var proto = ctor.prototype = new Predicate();
     proto._initialize('unaryPredicate', {
       'not': { aliases: [ '!', '~' ] }
@@ -10376,7 +10289,7 @@ breeze.NamingConvention = NamingConvention;
 
     return ctor;
   })();
-  
+
   var BinaryPredicate = (function () {
     var ctor = function BinaryPredicate(op, expr1, expr2) {
       // 5 public props op, expr1Source, expr2Source, expr1, expr2
@@ -10386,7 +10299,7 @@ breeze.NamingConvention = NamingConvention;
       // this.expr1 and this.expr2 won't be
       // determined until validate is run
     };
-    
+
     var proto = ctor.prototype = new Predicate();
     proto._initialize('binaryPredicate', {
       'eq': {
@@ -10450,7 +10363,7 @@ breeze.NamingConvention = NamingConvention;
 
     return ctor;
   })();
-  
+
   var AndOrPredicate = (function () {
     // two public props: op, preds
     var ctor = function AndOrPredicate(op, preds) {
@@ -10471,7 +10384,7 @@ breeze.NamingConvention = NamingConvention;
         return this.preds[0];
       }
     };
-    
+
     var proto = ctor.prototype = new Predicate();
     proto._initialize("andOrPredicate", {
       'and': { aliases: [ '&&' ] },
@@ -10486,7 +10399,7 @@ breeze.NamingConvention = NamingConvention;
 
     return ctor;
   })();
-  
+
   var AnyAllPredicate = (function () {
     // 4 public props: op, exprSource, expr, pred
     var ctor = function AnyAllPredicate(op, expr, pred) {
@@ -10495,7 +10408,7 @@ breeze.NamingConvention = NamingConvention;
       // this.expr will not be resolved until validate is called
       this.pred = Predicate(pred);
     };
-    
+
     var proto = ctor.prototype = new Predicate();
     proto._initialize("anyAllPredicate", {
       'any': { aliases: ['some'] },
@@ -10559,13 +10472,13 @@ breeze.NamingConvention = NamingConvention;
         if (dt) return dt;
         throw new Error("Unable to resolve a dataType named: " + dataType);
       }
-      
+
       throw new Error("The dataType parameter passed into this literal expression is not a 'DataType'" + dataType);
     }
-    
+
     return ctor;
   })();
-  
+
   var PropExpr = (function () {
     // two public props: propertyPath, dateType
     var ctor = function PropExpr(propertyPath) {
@@ -10598,9 +10511,9 @@ breeze.NamingConvention = NamingConvention;
 
     return ctor;
   })();
-  
+
   var FnExpr = (function () {
-    
+
     var ctor = function FnExpr(fnName, exprs) {
       // 4 public props: fnName, exprs, localFn, dataType
       this.fnName = fnName;
@@ -10725,7 +10638,7 @@ breeze.NamingConvention = NamingConvention;
         }, dataType: DataType.Int32
       }
     };
-    
+
     return ctor;
   })();
 
@@ -10747,7 +10660,7 @@ breeze.NamingConvention = NamingConvention;
     }
 
     if (!__isString(source)) {
-      if (source != null && __isObject(source) && !source.toISOString) { 
+      if (source != null && __isObject(source) && !source.toISOString) {
         // source is an object but not a Date-like thing such as a JS or MomentJS Date
         if (source.value === undefined) {
           throw new Error("Unable to resolve an expression for: " + source + " on entityType: " + entityType.name);
@@ -10862,7 +10775,7 @@ breeze.NamingConvention = NamingConvention;
       passthruPredicate: function () {
         throw new Error("Cannot execute an PassthruPredicate expression against the local cache: " + this.value);
       },
-      
+
       unaryPredicate: function (context) {
         var predFn = this.pred.visit(context);
         switch (this.op.key) {
@@ -10874,7 +10787,7 @@ breeze.NamingConvention = NamingConvention;
             throw new Error("Invalid unary operator:" + this.op.key);
         }
       },
-      
+
       binaryPredicate: function (context) {
         var expr1Fn = this.expr1.visit(context);
         var expr2Fn = this.expr2.visit(context);
@@ -10888,7 +10801,7 @@ breeze.NamingConvention = NamingConvention;
           return predFn(expr1Fn(entity), expr2Fn(entity));
         };
       },
-      
+
       andOrPredicate: function (context) {
         var predFns = this.preds.map(function(pred) {
           return pred.visit(context);
@@ -10912,7 +10825,7 @@ breeze.NamingConvention = NamingConvention;
             throw new Error("Invalid boolean operator:" + op.key);
         }
       },
-      
+
       anyAllPredicate: function (context) {
         var exprFn = this.expr.visit(context);
         var newContext = __extend({}, context);
@@ -10923,14 +10836,14 @@ breeze.NamingConvention = NamingConvention;
           return anyAllPredFn(exprFn(entity), predFn);
         };
       },
-      
+
       litExpr: function () {
         var value = this.value;
         return function (entity) {
           return value;
         };
       },
-      
+
       propExpr: function () {
         var propertyPath = this.propertyPath;
         var properties = propertyPath.split('.');
@@ -10944,7 +10857,7 @@ breeze.NamingConvention = NamingConvention;
           };
         }
       },
-      
+
       fnExpr: function (context) {
         var exprFns = this.exprs.map(function(expr) {
           return expr.visit(context);
@@ -11067,7 +10980,7 @@ breeze.NamingConvention = NamingConvention;
       }
       return a === b;
     }
-    
+
     function stringStartsWith(a, b, lqco) {
       if (!lqco.isCaseSensitive) {
         a = (a || "").toLowerCase();
@@ -11075,7 +10988,7 @@ breeze.NamingConvention = NamingConvention;
       }
       return __stringStartsWith(a, b);
     }
-    
+
     function stringEndsWith(a, b, lqco) {
       if (!lqco.isCaseSensitive) {
         a = (a || "").toLowerCase();
@@ -11083,7 +10996,7 @@ breeze.NamingConvention = NamingConvention;
       }
       return __stringEndsWith(a, b);
     }
-    
+
     function stringContains(a, b, lqco) {
       if (!lqco.isCaseSensitive) {
         a = (a || "").toLowerCase();
@@ -11091,7 +11004,7 @@ breeze.NamingConvention = NamingConvention;
       }
       return a.indexOf(b) >= 0;
     }
-    
+
     return visitor;
   }());
 
@@ -11101,14 +11014,14 @@ breeze.NamingConvention = NamingConvention;
       passthruPredicate: function () {
         return this.value;
       },
-      
+
       unaryPredicate: function (context) {
         var predVal = this.pred.visit(context);
         var json = {};
         json[this.op.key] = predVal;
         return json;
       },
-      
+
       binaryPredicate: function (context) {
         var expr1Val = this.expr1.visit(context);
         var expr2Val = this.expr2.visit(context);
@@ -11125,14 +11038,11 @@ breeze.NamingConvention = NamingConvention;
         }
         return json;
       },
-      
+
       andOrPredicate: function (context) {
         var predVals = this.preds.map(function(pred) {
           return pred.visit(context);
         });
-        if (!predVals || !predVals.length) {
-          return {};
-        }
         var json;
         // normalizeAnd clauses if possible.
         // passthru predicate will appear as string and their 'ands' can't be 'normalized'
@@ -11146,7 +11056,7 @@ breeze.NamingConvention = NamingConvention;
         }
         return json;
       },
-      
+
       anyAllPredicate: function (context) {
         var exprVal = this.expr.visit(context);
         var newContext = __extend({}, context);
@@ -11158,7 +11068,7 @@ breeze.NamingConvention = NamingConvention;
         json[exprVal] = value;
         return json;
       },
-      
+
       litExpr: function (context) {
         if (this.hasExplicitDataType || context.useExplicitDataType) {
           return { value: this.value, dataType: this.dataType.name }
@@ -11166,7 +11076,7 @@ breeze.NamingConvention = NamingConvention;
           return this.value;
         }
       },
-      
+
       propExpr: function (context) {
         if (context.toNameOnServer) {
           return context.entityType.clientPropertyPathToServer(this.propertyPath);
@@ -11174,7 +11084,7 @@ breeze.NamingConvention = NamingConvention;
           return this.propertyPath;
         }
       },
-      
+
       fnExpr: function (context) {
         var exprVals = this.exprs.map(function(expr) {
           return expr.visit(context);
@@ -11182,7 +11092,7 @@ breeze.NamingConvention = NamingConvention;
         return this.fnName + "(" + exprVals.join(",") + ")";
       }
     };
-    
+
     function combine(j1, j2) {
       var ok = Object.keys(j2).every(function (key) {
         if (j1.hasOwnProperty(key)) {
@@ -11200,11 +11110,11 @@ breeze.NamingConvention = NamingConvention;
       });
       return ok ? j1 : null;
     }
-    
+
     return visitor;
   }());
 
-  
+
   return Predicate;
 
 })();
@@ -11238,7 +11148,7 @@ breeze.Predicate = Predicate;
     if (resourceName != null && !__isString(resourceName)) {
       return fromJSON(this, resourceName);
     }
-    
+
     this.resourceName = resourceName;
     this.fromEntityType = null;
     this.wherePredicate = null;
@@ -11258,8 +11168,8 @@ breeze.Predicate = Predicate;
   };
   var proto = ctor.prototype;
   proto._$typeName = "EntityQuery";
-  
-  
+
+
   /**
   The resource name used by this query.
 
@@ -11350,7 +11260,7 @@ breeze.Predicate = Predicate;
     assertParam(resourceName, "resourceName").isString().check();
     return clone(this, "resourceName", resourceName);
   };
-  
+
   /**
   This is a static version of the "from" method and it creates a 'base' entityQuery for the specified resource name.
   @example
@@ -11368,7 +11278,7 @@ breeze.Predicate = Predicate;
     assertParam(resourceName, "resourceName").isString().check();
     return new EntityQuery(resourceName);
   };
-  
+
   /**
   Specifies the top level EntityType that this query will return.  Only needed when a query returns a json result that does not include type information.
   @example
@@ -11386,8 +11296,8 @@ breeze.Predicate = Predicate;
     assertParam(entityType, "entityType").isString().or().isInstanceOf(EntityType).check();
     return clone(this, "resultEntityType", entityType);
   };
-  
-  
+
+
   /**
   Returns a new query with an added filter criteria; Can be called multiple times which means to 'and' with any existing
   Predicate or can be called with null to clear all predicates.
@@ -11494,7 +11404,7 @@ breeze.Predicate = Predicate;
     }
     return clone(this, "orderByClause", orderByClause);
   }
-  
+
   /**
   Returns a new query that orders the results of the query by property name in descending order.
   @example
@@ -11520,7 +11430,7 @@ breeze.Predicate = Predicate;
   proto.orderByDesc = function (propertyPaths) {
     return this.orderBy(propertyPaths, true);
   };
-  
+
   /**
   Returns a new query that selects a list of properties from the results of the original query and returns the values of just these properties. This
   will be referred to as a projection.
@@ -11561,7 +11471,7 @@ breeze.Predicate = Predicate;
     var selectClause = propertyPaths == null ? null : new SelectClause(normalizePropertyPaths(propertyPaths));
     return clone(this, "selectClause", selectClause);
   };
-  
+
   /**
   Returns a new query that skips the specified number of entities when returning results.
   Any existing 'skip' can be cleared by calling 'skip' with no arguments.
@@ -11578,7 +11488,7 @@ breeze.Predicate = Predicate;
     assertParam(count, "count").isOptional().isNumber().check();
     return clone(this, "skipCount", (count == null) ? null : count);
   };
-  
+
   /**
   Returns a new query that returns only the specified number of entities when returning results. - Same as 'take'.
   Any existing 'top' can be cleared by calling 'top' with no arguments.
@@ -11594,7 +11504,7 @@ breeze.Predicate = Predicate;
   proto.top = function (count) {
     return this.take(count);
   };
-  
+
   /**
   Returns a new query that returns only the specified number of entities when returning results - Same as 'top'.
   Any existing take can be cleared by calling take with no arguments.
@@ -11611,7 +11521,7 @@ breeze.Predicate = Predicate;
     assertParam(count, "count").isOptional().isNumber().check();
     return clone(this, "takeCount", (count == null) ? null : count);
   };
-  
+
   /**
   Returns a new query that will return related entities nested within its results. The expand method allows you to identify related entities, via navigation property
   names such that a graph of entities may be retrieved with a single request. Any filtering occurs before the results are 'expanded'.
@@ -11639,13 +11549,13 @@ breeze.Predicate = Predicate;
     var expandClause = propertyPaths == null ? null : new ExpandClause(normalizePropertyPaths(propertyPaths));
     return clone(this, "expandClause", expandClause);
   };
-  
+
   /**
   Returns a new query that includes a collection of parameters to pass to the server.
   @example
       var query = EntityQuery.from("EmployeesFilteredByCountryAndBirthdate")
         .withParameters({ BirthDate: "1/1/1960", Country: "USA" });
-   
+
   will call the 'EmployeesFilteredByCountryAndBirthdate' method on the server and pass in 2 parameters. This
   query will be uri encoded as
   @example
@@ -11667,7 +11577,7 @@ breeze.Predicate = Predicate;
     assertParam(parameters, "parameters").isObject().check();
     return clone(this, "parameters", parameters);
   };
-  
+
   /**
   Returns a query with the 'inlineCount' capability either enabled or disabled.  With 'inlineCount' enabled, an additional 'inlineCount' property
   will be returned with the query results that will contain the number of entities that would have been returned by this
@@ -11696,7 +11606,7 @@ breeze.Predicate = Predicate;
     usesNameOnServer = (usesNameOnServer === undefined) ? true : !!usesNameOnServer;
     return clone(this, "usesNameOnServer", usesNameOnServer);
   }
-  
+
   /**
   Returns a query with the 'noTracking' capability either enabled or disabled.  With 'noTracking' enabled, the results of this query
   will not be coerced into entities but will instead look like raw javascript projections. i.e. simple javascript objects.
@@ -11717,7 +11627,7 @@ breeze.Predicate = Predicate;
     enabled = (enabled === undefined) ? true : !!enabled;
     return clone(this, "noTrackingEnabled", enabled);
   };
-  
+
   /**
   Returns a copy of this EntityQuery with the specified {{#crossLink "EntityManager"}}{{/crossLink}}, {{#crossLink "DataService"}}{{/crossLink}},
   {{#crossLink "JsonResultsAdapter"}}{{/crossLink}}, {{#crossLink "MergeStrategy"}}{{/crossLink}} or {{#crossLink "FetchStrategy"}}{{/crossLink}} applied.
@@ -11736,7 +11646,7 @@ breeze.Predicate = Predicate;
       var em = new EntityManager(serviceName);
       var query = new EntityQuery("Orders")
         .using(FetchStrategy.FromLocalCache);
-  
+
   @method using
   @param obj {EntityManager|QueryOptions|DataService|MergeStrategy|FetchStrategy|JsonResultsAdapter|config object} The object to update in creating a new EntityQuery from an existing one.
   @return {EntityQuery}
@@ -11761,7 +11671,7 @@ breeze.Predicate = Predicate;
     }, obj);
     return eq;
   };
-  
+
   /**
   Executes this query.  This method requires that an EntityManager has been previously specified via the "using" method.
   @example
@@ -11827,7 +11737,7 @@ breeze.Predicate = Predicate;
     }
     return this.entityManager.executeQuery(this, callback, errorCallback);
   };
-  
+
   /**
   Executes this query against the local cache.  This method requires that an EntityManager have been previously specified via the "using" method.
   @example
@@ -11845,18 +11755,18 @@ breeze.Predicate = Predicate;
     }
     return this.entityManager.executeQueryLocally(this);
   };
-  
+
   proto.toJSON = function () {
     return this.toJSONExt();
   }
-  
+
   proto.toJSONExt = function (context) {
     context = context || {};
     context.entityType = context.entityType || this.fromEntityType;
     context.propertyPathFn = context.toNameOnServer ? context.entityType.clientPropertyPathToServer.bind(context.entityType) : __identity;
-    
+
     var that = this;
-    
+
     var toJSONExtFn = function (v) {
       return v ? v.toJSONExt(context) : undefined;
     };
@@ -11881,7 +11791,7 @@ breeze.Predicate = Predicate;
     });
 
   }
-  
+
   function fromJSON(eq, json) {
     __toJson(json, {
       "resourceName,from": null,
@@ -11912,7 +11822,7 @@ breeze.Predicate = Predicate;
     }, eq);
     return eq;
   }
-  
+
   /**
   Static method that creates an EntityQuery that will allow 'requerying' an entity or a collection of entities by primary key. This can be useful
   to force a requery of selected entities, or to restrict an existing collection of entities according to some filter.
@@ -11964,7 +11874,7 @@ breeze.Predicate = Predicate;
     }
     return q;
   };
-  
+
   /**
   Creates an EntityQuery for the specified {{#crossLink "EntityKey"}}{{/crossLink}}.
   @example
@@ -11989,7 +11899,7 @@ breeze.Predicate = Predicate;
     q = q.where(pred).toType(entityKey.entityType);
     return q;
   };
-  
+
   /**
   Creates an EntityQuery for the specified entity and {{#crossLink "NavigationProperty"}}{{/crossLink}}.
   @example
@@ -12013,21 +11923,21 @@ breeze.Predicate = Predicate;
     var em = entity.entityAspect.entityManager;
     return em ? q.using(em) : q;
   };
-  
+
   // protected methods
-  
+
   proto._getFromEntityType = function (metadataStore, throwErrorIfNotFound) {
     // Uncomment next two lines if we make this method public.
     // assertParam(metadataStore, "metadataStore").isInstanceOf(MetadataStore).check();
     // assertParam(throwErrorIfNotFound, "throwErrorIfNotFound").isBoolean().isOptional().check();
     var entityType = this.fromEntityType;
     if (entityType) return entityType;
-    
+
     var resourceName = this.resourceName;
     if (!resourceName) {
       throw new Error("There is no resourceName for this query");
     }
-    
+
     if (metadataStore.isEmpty()) {
       if (throwErrorIfNotFound) {
         throw new Error("There is no metadata available for this query. " +
@@ -12036,29 +11946,29 @@ breeze.Predicate = Predicate;
         return null;
       }
     }
-    
+
     var entityTypeName = metadataStore.getEntityTypeNameForResourceName(resourceName);
     if (entityTypeName) {
       entityType = metadataStore._getEntityType(entityTypeName);
     } else {
       entityType = this._getToEntityType(metadataStore, true);
     }
-    
+
     if (!entityType) {
       if (throwErrorIfNotFound) {
-        throw new Error(__formatString("Cannot find an entityType for resourceName: '%1'. " 
-            + " Consider adding an 'EntityQuery.toType' call to your query or " 
+        throw new Error(__formatString("Cannot find an entityType for resourceName: '%1'. "
+            + " Consider adding an 'EntityQuery.toType' call to your query or "
             + "calling the MetadataStore.setEntityTypeForResourceName method to register an entityType for this resourceName.", resourceName));
       } else {
         return null;
       }
     }
-    
+
     this.fromEntityType = entityType;
     return entityType;
 
   };
-  
+
   proto._getToEntityType = function (metadataStore, skipFromCheck) {
     // skipFromCheck is to avoid recursion if called from _getFromEntityType;
     if (this.resultEntityType instanceof EntityType) {
@@ -12074,15 +11984,15 @@ breeze.Predicate = Predicate;
       return skipFromCheck ? null : (!this.selectClause) && this._getFromEntityType(metadataStore, false);
     }
   };
-  
+
   // for testing
   proto._toUri = function (em) {
     var ds = DataService.resolve([em.dataService]);
     return ds.uriBuilder.buildUri(this, em.metadataStore);
   }
-  
+
   // private functions
-  
+
   function clone(that, propName, value) {
     // immutable queries mean that we don't need to clone if no change in value.
     if (propName) {
@@ -12112,7 +12022,7 @@ breeze.Predicate = Predicate;
     }
     return copy;
   }
-  
+
   function processUsing(eq, map, value, propertyName) {
     var typeName = value._$typeName || (value.parentEnum && value.parentEnum.name);
     var key = typeName && typeName.substr(0, 1).toLowerCase() + typeName.substr(1);
@@ -12134,19 +12044,19 @@ breeze.Predicate = Predicate;
       });
     }
   }
-  
+
   function normalizePropertyPaths(propertyPaths) {
     assertParam(propertyPaths, "propertyPaths").isOptional().isString().or().isArray().isString().check();
     if (typeof propertyPaths === 'string') {
       propertyPaths = propertyPaths.split(",");
     }
-    
+
     propertyPaths = propertyPaths.map(function (pp) {
       return pp.trim();
     });
     return propertyPaths;
   }
-  
+
   function buildPredicate(entity) {
     var entityType = entity.entityType;
     var predParts = entityType.keyProperties.map(function (kp) {
@@ -12155,7 +12065,7 @@ breeze.Predicate = Predicate;
     var pred = Predicate.and(predParts);
     return pred;
   }
-  
+
   function buildKeyPredicate(entityKey) {
     var keyProps = entityKey.entityType.keyProperties;
     var preds = __arrayZip(keyProps, entityKey.values, function (kp, v) {
@@ -12164,7 +12074,7 @@ breeze.Predicate = Predicate;
     var pred = Predicate.and(preds);
     return pred;
   }
-  
+
   function buildNavigationPredicate(entity, navigationProperty) {
     if (navigationProperty.isScalar) {
       if (navigationProperty.foreignKeyNames.length === 0) return null;
@@ -12174,7 +12084,7 @@ breeze.Predicate = Predicate;
       var entityKey = new EntityKey(navigationProperty.entityType, relatedKeyValues);
       return buildKeyPredicate(entityKey);
     } else {
-      var inverseNp = navigationProperty.getInverse();
+      var inverseNp = navigationProperty.inverse;
       var foreignKeyNames = inverseNp ? inverseNp.foreignKeyNames : navigationProperty.invForeignKeyNames;
       if (foreignKeyNames.length === 0) return null;
       var keyValues = entity.entityAspect.getKey().values;
@@ -12184,7 +12094,7 @@ breeze.Predicate = Predicate;
       return Predicate.and(predParts);
     }
   }
-  
+
   return ctor;
 })();
 
@@ -12259,7 +12169,7 @@ var FilterQueryOp = (function () {
    @static
    **/
   aEnum.EndsWith = aEnum.addSymbol({ operator: "endswith" });
-  
+
   /**
    Aliases: "some"
    @property Any {FilterQueryOp}
@@ -12267,7 +12177,7 @@ var FilterQueryOp = (function () {
    @static
    **/
   aEnum.Any = aEnum.addSymbol({ operator: "any" });
-  
+
   /**
    Aliases: "every"
    @property All {FilterQueryOp}
@@ -12289,7 +12199,7 @@ var FilterQueryOp = (function () {
    @static
    **/
   aEnum.IsTypeOf = aEnum.addSymbol({ operator: "isof" });
-  
+
   aEnum.resolveSymbols();
 
   return aEnum;
@@ -12300,7 +12210,7 @@ var BooleanQueryOp = (function () {
   aEnum.And = aEnum.addSymbol({ operator: "and" });
   aEnum.Or = aEnum.addSymbol({ operator: "or" });
   aEnum.Not = aEnum.addSymbol({ operator: "not" });
-  
+
   aEnum.resolveSymbols();
 
   return aEnum;
@@ -12321,7 +12231,7 @@ var BooleanQueryOp = (function () {
  @class OrderByClause
  */
 var OrderByClause = (function () {
-  
+
   var ctor = function (propertyPaths, isDesc) {
 
     if (propertyPaths.length > 1) {
@@ -12339,7 +12249,7 @@ var OrderByClause = (function () {
     this.items = items;
   };
   var proto = ctor.prototype;
-  
+
   proto.validate = function (entityType) {
     if (entityType == null || entityType.isAnonymous) return;
     this.items.forEach(function (item) {
@@ -12348,7 +12258,7 @@ var OrderByClause = (function () {
   };
 
 
-  
+
   proto.getComparer = function (entityType) {
     var orderByFuncs = this.items.map(function (obc) {
       return obc.getComparer(entityType);
@@ -12363,19 +12273,19 @@ var OrderByClause = (function () {
       return 0;
     };
   };
-  
+
   proto.toJSONExt = function (context) {
     return this.items.map(function (item) {
       return context.propertyPathFn(item.propertyPath) + (item.isDesc ? " desc" : "");
     });
   };
-  
+
   var OrderByItem = function (propertyPath, isDesc) {
     if (!(typeof propertyPath === 'string')) {
       throw new Error("propertyPath is not a string");
     }
     propertyPath = propertyPath.trim();
-    
+
     var parts = propertyPath.split(' ');
     // parts[0] is the propertyPath; [1] would be whether descending or not.
     if (parts.length > 1 && isDesc !== true && isDesc !== false) {
@@ -12392,15 +12302,15 @@ var OrderByClause = (function () {
     this.propertyPath = parts[0];
     this.isDesc = isDesc;
   };
-  
+
   var itemProto = OrderByItem.prototype;
-  
+
   itemProto.validate = function (entityType) {
     if (entityType == null || entityType.isAnonymous) return;
     // will throw an exception on bad propertyPath
     this.lastProperty = entityType.getProperty(this.propertyPath, true);
   };
-  
+
   itemProto.getComparer = function (entityType) {
     if (!this.lastProperty) this.validate(entityType);
     if (this.lastProperty) {
@@ -12409,7 +12319,7 @@ var OrderByClause = (function () {
     }
     var propertyPath = this.propertyPath;
     var isDesc = this.isDesc;
-    
+
     return function (entity1, entity2) {
       var value1 = getPropertyPathValue(entity1, propertyPath);
       var value2 = getPropertyPathValue(entity2, propertyPath);
@@ -12436,13 +12346,13 @@ var OrderByClause = (function () {
       }
     };
   };
-  
+
   return ctor;
 })();
 
 // Not exposed
 var SelectClause = (function () {
-  
+
   var ctor = function (propertyPaths) {
     this.propertyPaths = propertyPaths;
     this._pathNames = propertyPaths.map(function (pp) {
@@ -12450,7 +12360,7 @@ var SelectClause = (function () {
     });
   };
   var proto = ctor.prototype;
-  
+
   proto.validate = function (entityType) {
     if (entityType == null || entityType.isAnonymous) return; // can't validate yet
     // will throw an exception on bad propertyPath
@@ -12458,7 +12368,7 @@ var SelectClause = (function () {
       entityType.getProperty(path, true);
     });
   };
-  
+
   proto.toFunction = function (/* config */) {
     var that = this;
     return function (entity) {
@@ -12469,31 +12379,31 @@ var SelectClause = (function () {
       return result;
     };
   };
-  
+
   proto.toJSONExt = function (context) {
     return this.propertyPaths.map(function (pp) {
       return context.propertyPathFn(pp);
     })
   };
-  
+
   return ctor;
 })();
 
 // Not exposed
 var ExpandClause = (function () {
-  
+
   // propertyPaths is an array of strings.
   var ctor = function (propertyPaths) {
     this.propertyPaths = propertyPaths;
   };
   var proto = ctor.prototype;
-  
+
   proto.toJSONExt = function (context) {
     return this.propertyPaths.map(function (pp) {
       return context.propertyPathFn(pp);
     })
   };
-  
+
   return ctor;
 })();
 
@@ -12686,7 +12596,7 @@ var QueryOptions = (function () {
   @example
       var queryOptions = em.queryOptions.using({
           includeDeleted: true,
-          fetchStrategy:  FetchStrategy.FromLocalCache 
+          fetchStrategy:  FetchStrategy.FromLocalCache
       });
   @method using
   @param config {Configuration Object|MergeStrategy|FetchStrategy} The object to apply to create a new QueryOptions.
@@ -13445,9 +13355,7 @@ var EntityManager = (function () {
         var entityType = that.metadataStore._getEntityType(entityTypeName, true);
         var targetEntityGroup = findOrCreateEntityGroup(that, entityType);
         var entities = importEntityGroup(targetEntityGroup, jsonGroup, config);
-        if (entities && entities.length) {
-          entitiesToLink = entitiesToLink.concat(entities);
-        }
+        Array.prototype.push.apply(entitiesToLink, entities);
       });
       entitiesToLink.forEach(function (entity) {
         if (!entity.entityAspect.entityState.isDeleted()) {
@@ -13988,8 +13896,8 @@ var EntityManager = (function () {
     function processSavedEntities(saveResult) {
 
       var savedEntities = saveResult.entities;
-      var deletedKeys = saveResult.deletedKeys || [];
-      if (savedEntities.length === 0 && deletedKeys.length == 0) {
+
+      if (savedEntities.length === 0) {
         return [];
       }
       var keyMappings = saveResult.keyMappings;
@@ -14011,17 +13919,6 @@ var EntityManager = (function () {
         // the save operation did not actually return the entity - i.e. during OData and Mongo updates and deletes.
         savedEntities = mappingContext.visitAndMerge(savedEntities, { nodeType: "root" });
       });
-
-      // detach any entities found in the em that appear in the deletedKeys list. 
-      
-      deletedKeys.forEach(function(key) {
-        var entityType = em.metadataStore._getEntityType(key.entityTypeName);
-        var ekey = new EntityKey(entityType, key.keyValues);
-        var entity = em.findEntityByKey(ekey);
-        if (entity) {
-          entity.entityAspect.setDetached();
-        }
-      })
 
       return savedEntities;
     }
@@ -14532,14 +14429,9 @@ var EntityManager = (function () {
       var unattachedMap = em._unattachedChildrenMap;
       var entityKey = entityAspect.getKey();
 
-    var entityType = entityKey.entityType;
-    while (entityType) {
-      var keystring = entityKey.toString(entityType);
-
       // attach any unattachedChildren
-      var tuples = unattachedMap.getTuplesByString(keystring);
-
-      if (tuples && tuples.length) {
+      var tuples = unattachedMap.getTuples(entityKey);
+      if (tuples) {
         tuples.slice(0).forEach(function (tpl) {
 
           var unattachedChildren = tpl.children.filter(function (e) {
@@ -14552,10 +14444,10 @@ var EntityManager = (function () {
           // except with unidirectional 1-n where it is parentToChildNp;
           var np = tpl.navigationProperty;
 
-          if (np.getInverse()) {
+          if (np.inverse) {
             // bidirectional
             childToParentNp = np;
-            parentToChildNp = np.getInverse();
+            parentToChildNp = np.inverse;
 
             if (parentToChildNp.isScalar) {
               var onlyChild = unattachedChildren[0];
@@ -14589,11 +14481,9 @@ var EntityManager = (function () {
               });
             }
           }
-          unattachedMap.removeChildrenByString(keystring, childToParentNp);
+          unattachedMap.removeChildren(entityKey, childToParentNp);
         });
       }
-      entityType = entityType.baseEntityType;
-    }
 
 
       // now add to unattachedMap if needed.
@@ -14676,8 +14566,8 @@ var EntityManager = (function () {
       // eg may be undefined or null
       if (!eg) return;
       var entities = eg.getChanges();
-      if (selected && selected.length) {
-        selected = selected.concat(entities);
+      if (selected) {
+        selected.push.apply(selected, entities);
       } else {
         selected = entities;
       }
@@ -14694,8 +14584,8 @@ var EntityManager = (function () {
       // eg may be undefined or null
       if (!eg) return;
       var entities = eg.getEntities(entityStates);
-      if (selected && selected.length) {
-        selected = selected.concat(entities);
+      if (selected) {
+        selected.push.apply(selected, entities);
       } else {
         selected = entities;
       }
@@ -15367,39 +15257,28 @@ var EntityManager = (function () {
     tuple.children.push(child);
   };
 
-  // UnattachedChildrenMap.prototype.removeChildren = function (parentEntityKey, navigationProperty) {
-  //   var tuples = this.getTuples(parentEntityKey);
-  //   if (!tuples) return;
-  //   __arrayRemoveItem(tuples, function (t) {
-  //     return t.navigationProperty === navigationProperty;
-  //   });
-  //   if (!tuples.length) {
-  //     delete this.map[parentEntityKey.toString()];
-  //   }
-  // };
-
-  UnattachedChildrenMap.prototype.removeChildrenByString = function (parentEntityKeyString, navigationProperty) {
-    var tuples = this.map[parentEntityKeyString];
+  UnattachedChildrenMap.prototype.removeChildren = function (parentEntityKey, navigationProperty) {
+    var tuples = this.getTuples(parentEntityKey);
     if (!tuples) return;
     __arrayRemoveItem(tuples, function (t) {
       return t.navigationProperty === navigationProperty;
     });
     if (!tuples.length) {
-      delete this.map[parentEntityKeyString];
+      delete this.map[parentEntityKey.toString()];
     }
   };
 
-  // UnattachedChildrenMap.prototype.getChildren = function (parentEntityKey, navigationProperty) {
-  //   var tuple = this.getTuple(parentEntityKey, navigationProperty);
-  //   if (tuple) {
-  //     return tuple.children.filter(function (child) {
-  //       // it may have later been detached.
-  //       return !child.entityAspect.entityState.isDetached();
-  //     });
-  //   } else {
-  //     return null;
-  //   }
-  // };
+  UnattachedChildrenMap.prototype.getChildren = function (parentEntityKey, navigationProperty) {
+    var tuple = this.getTuple(parentEntityKey, navigationProperty);
+    if (tuple) {
+      return tuple.children.filter(function (child) {
+        // it may have later been detached.
+        return !child.entityAspect.entityState.isDetached();
+      });
+    } else {
+      return null;
+    }
+  };
 
   UnattachedChildrenMap.prototype.getTuple = function (parentEntityKey, navigationProperty) {
     var tuples = this.getTuples(parentEntityKey);
@@ -15412,25 +15291,14 @@ var EntityManager = (function () {
 
 
   UnattachedChildrenMap.prototype.getTuples = function (parentEntityKey) {
-    var allTuples = [];
     var tuples = this.map[parentEntityKey.toString()];
-    if (tuples) {
-      allTuples = allTuples.concat(tuples);
-    }
     var entityType = parentEntityKey.entityType;
-    while (entityType.baseEntityType) {
+    while (!tuples && entityType.baseEntityType) {
       entityType = entityType.baseEntityType;
       var baseKey = parentEntityKey.toString(entityType);
       tuples = this.map[baseKey];
-      if (tuples) {
-        allTuples = allTuples.concat(tuples);
-      }
     }
-    return (allTuples.length) ? allTuples : undefined;
-  };
-
-  UnattachedChildrenMap.prototype.getTuplesByString = function (parentEntityKeyString) {
-    return this.map[parentEntityKeyString];
+    return tuples;
   };
 
   return ctor;
@@ -15632,10 +15500,6 @@ var MappingContext = (function () {
 
   function updateEntityRef(mc, targetEntity, node) {
     var nodeId = node._$meta.nodeId;
-    if (!nodeId && node._$meta.extraMetadata) {
-      // odata case.  refMap isn't really used, but is returned as data.retrievedEntities, so we populated it anyway.
-      nodeId = node._$meta.extraMetadata.uriKey;
-    }
     if (nodeId != null) {
       mc.refMap[nodeId] = targetEntity;
     }
@@ -15676,7 +15540,7 @@ var MappingContext = (function () {
             targetEntity.entityAspect.extraMetadata = meta.extraMetadata;
           }
           targetEntity.entityAspect.entityState = EntityState.Unchanged;
-          clearOriginalValues(targetEntity);
+          targetEntity.entityAspect.originalValues = {};
           targetEntity.entityAspect.propertyChanged.publish({ entity: targetEntity, propertyName: null });
           var action = isSaving ? EntityAction.MergeOnSave : EntityAction.MergeOnQuery;
           em.entityChanged.publish({ entityAction: action, entity: targetEntity });
@@ -15706,22 +15570,6 @@ var MappingContext = (function () {
       em.entityChanged.publish({ entityAction: EntityAction.AttachOnQuery, entity: targetEntity });
     }
     return targetEntity;
-  }
-
-  // copied from entityAspect
-  function clearOriginalValues(target) {
-    var aspect = target.entityAspect || target.complexAspect;
-    aspect.originalValues = {};
-    var stype = target.entityType || target.complexType;
-    stype.complexProperties.forEach(function (cp) {
-      var cos = target.getProperty(cp.name);
-      if (cp.isScalar) {
-        clearOriginalValues(cos);
-      } else {
-        cos._acceptChanges();
-        cos.forEach(clearOriginalValues);
-      }
-    });
   }
 
   function updateEntityNoMerge(mc, targetEntity, node) {
@@ -15768,7 +15616,7 @@ var MappingContext = (function () {
     var relatedEntities = mergeRelatedEntitiesCore(mc, rawEntity, navigationProperty);
     if (relatedEntities == null) return;
 
-    var inverseProperty = navigationProperty.getInverse();
+    var inverseProperty = navigationProperty.inverse;
     if (!inverseProperty) return;
 
     var originalRelatedEntities = targetEntity.getProperty(navigationProperty.name);
@@ -15820,7 +15668,7 @@ var MappingContext = (function () {
     if (currentRelatedEntity !== relatedEntity) {
       // if not hook up both directions.
       targetEntity.setProperty(propName, relatedEntity);
-      var inverseProperty = navigationProperty.getInverse();
+      var inverseProperty = navigationProperty.inverse;
       if (!inverseProperty) return;
       if (inverseProperty.isScalar) {
         relatedEntity.setProperty(inverseProperty.name, targetEntity);
@@ -15857,7 +15705,7 @@ var MappingContext = (function () {
 
   return ctor;
 })();
-   
+
 
 
 ;/**
@@ -16317,11 +16165,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -16397,9 +16245,7 @@ breeze.SaveOptions = SaveOptions;
       config: ngConfig,   // angular's $http configuration object
       dsaConfig: config,  // the config arg from the calling Breeze DataServiceAdapter
       success: successFn, // adapter's success callback
-      error: errorFn,     // adapter's error callback
-      responseSuccess: responseSuccessFn, // adapter's success callback (ng 1.6+)
-      responseError: responseErrorFn      // adapter's error callback (ng 1.6+)
+      error: errorFn      // adapter's error callback
     }
 
     if (core.isFunction(this.requestInterceptor)) {
@@ -16410,19 +16256,10 @@ breeze.SaveOptions = SaveOptions;
     }
 
     if (requestInfo.config) { // exists unless requestInterceptor killed it.
-      var prom = this.$http(requestInfo.config);
-      if (prom.success) {
-        // response for ng < 1.6        
-        prom.success(requestInfo.success).error(requestInfo.error);
-      } else {
-        // response for ng 1.6+
-        prom.then(requestInfo.responseSuccess).catch(requestInfo.responseError);
-      }
+      this.$http(requestInfo.config)
+          .success(requestInfo.success)
+          .error(requestInfo.error);
       this.$rootScope && this.$rootScope.$digest();
-    }
-
-    function responseSuccessFn(response) {
-      return successFn(response.data, response.status, response.headers, response.config, response.statusText);
     }
 
     function successFn(data, status, headers, xconfig, statusText) {
@@ -16437,10 +16274,6 @@ breeze.SaveOptions = SaveOptions;
         statusText: statusText
       };
       config.success(httpResponse);
-    }
-
-    function responseErrorFn(response) {
-      return errorFn(response.data, response.status, response.headers, response.config, response.statusText);
     }
 
     function errorFn(data, status, headers, xconfig, statusText) {
@@ -16506,11 +16339,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -16622,11 +16455,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -16657,11 +16490,11 @@ breeze.SaveOptions = SaveOptions;
   proto._createChangeRequestInterceptor = abstractDsaProto._createChangeRequestInterceptor;
   proto.headers = { "DataServiceVersion": "2.0" };
 
-  // Absolute URL is the default as of Breeze 1.5.5.  
+  // Absolute URL is the default as of Breeze 1.5.5.
   // To use relative URL (like pre-1.5.5), add adapterInstance.relativeUrl = true:
   //
   //     var ds = breeze.config.initializeAdapterInstance("dataService", "webApiOData");
-  //     ds.relativeUrl = true; 
+  //     ds.relativeUrl = true;
   //
   // To use custom url construction, add adapterInstance.relativeUrl = myfunction(dataService, url):
   //
@@ -16676,9 +16509,9 @@ breeze.SaveOptions = SaveOptions;
     // only prefix with serviceName if not already on the url
     var base = (core.stringStartsWith(url, serviceName)) ? '' : serviceName;
     // If no protocol, turn base into an absolute URI
-    if (window && serviceName.indexOf('//') < 0) { 
+    if (window && serviceName.indexOf('//') < 0) {
       // no protocol; make it absolute
-      base = window.location.protocol + '//' + window.location.host + 
+      base = window.location.protocol + '//' + window.location.host +
             (core.stringStartsWith(serviceName, '/') ? '' : '/') +
             base;
     }
@@ -16732,7 +16565,7 @@ breeze.SaveOptions = SaveOptions;
     }
 
     // Add query params if .withParameters was used
-    if (!core.isEmpty(mappingContext.query.parameters)) {
+    if (mappingContext.query.parameters) {
       var paramString = toQueryString(mappingContext.query.parameters);
       var sep = url.indexOf("?") < 0 ? "?" : "&";
       url = url + sep + paramString;
@@ -16740,7 +16573,7 @@ breeze.SaveOptions = SaveOptions;
 
     OData.read({
           requestUri: url,
-          headers: core.extend({}, this.headers)
+          headers: this.headers
         },
         function (data, response) {
           var inlineCount;
@@ -16782,14 +16615,11 @@ breeze.SaveOptions = SaveOptions;
       url = this.getAbsoluteUrl(dataService, '$metadata');
     }
 
-    var mheaders = core.extend({}, this.headers);
-    mheaders.Accept = 'application/*; odata.metadata=full';
-
     // OData.read(url,
     OData.read({
           requestUri: url,
           // headers: { "Accept": "application/json"}
-          headers: mheaders
+          headers: { Accept: 'application/json;odata.metadata=full' }
         },
         function (data) {
           // data.dataServices.schema is an array of schemas. with properties of
@@ -16848,7 +16678,7 @@ breeze.SaveOptions = SaveOptions;
     var contentKeys = saveContext.contentKeys;
 
     OData.request({
-      headers: core.extend({}, this.headers),
+      headers: { "DataServiceVersion": "2.0" },
       requestUri: url,
       method: "POST",
       data: requestData
@@ -17123,11 +16953,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -17176,33 +17006,22 @@ breeze.SaveOptions = SaveOptions;
   };
 
   proto._prepareSaveResult = function (saveContext, data) {
-    // use the jsonResultAdapter to extractResults and extractKeyMappings
-    var jra = saveContext.dataService.jsonResultsAdapter || this.jsonResultsAdapter;
-    var entities = jra.extractSaveResults(data) || [];
-    var keyMappings = jra.extractKeyMappings(data) || [];
-    var deletedKeys = jra.extractDeletedKeys ? (jra.extractDeletedKeys(data)) || [] : [];
-
-    if (keyMappings.length) {
+    // if lower case then all properties are already in there 'correct' case
+    // and the entityType name is already a client side name.
+    if (data.entities) {
+      // data: { entities: array of entities, keyMappings array of keyMappings
+      //   where: keyMapping: { entityTypeName: ..., tempValue: ..., realValue ... }
+      return data;
+    } else {
+      // else if coming from .NET
       // HACK: need to change the 'case' of properties in the saveResult
       // but KeyMapping properties internally are still ucase. ugh...
-      keyMappings = keyMappings.map(function (km) {
-        if (km.entityTypeName) return km; // it's already lower case
-
+      var keyMappings = data.KeyMappings.map(function (km) {
         var entityTypeName = MetadataStore.normalizeTypeName(km.EntityTypeName);
         return { entityTypeName: entityTypeName, tempValue: km.TempValue, realValue: km.RealValue };
       });
+      return { entities: data.Entities, keyMappings: keyMappings };
     }
-
-    if (deletedKeys.length) {
-      deletedKeys = deletedKeys.map(function(dk) {
-        if (dk.entityTypeName) return dk; // it's already lower case
-        var entityTypeName = MetadataStore.normalizeTypeName(dk.EntityTypeName);
-        // NOTE the dk.KeyValue => keyValues transition - needed because we are deserializing an .NET EntityKey
-        return { entityTypeName: entityTypeName, keyValues: dk.KeyValue }; 
-      });
-    }
-    
-    return { entities: entities, keyMappings: keyMappings, deletedKeys: deletedKeys };
   };
 
   proto.jsonResultsAdapter = new JsonResultsAdapter({
@@ -17233,11 +17052,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -17317,7 +17136,7 @@ breeze.SaveOptions = SaveOptions;
 
       } else if (prop.isNavigationProperty) {
         if (val !== undefined) {
-          throw new Error("Cannot assign a navigation property in an entity ctor.: " + propName);
+          throw new Error("Cannot assign a navigation property in an entity ctor.: " + prop.Name);
         }
         if (prop.isScalar) {
           // TODO: change this to nullstob later.
@@ -17527,11 +17346,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -17786,11 +17605,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -17828,11 +17647,11 @@ breeze.SaveOptions = SaveOptions;
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -17988,9 +17807,6 @@ breeze.SaveOptions = SaveOptions;
 
       anyAllPredicate: function (context) {
         var exprVal = this.expr.visit(context);
-        if (!this.pred.op) {
-          return exprVal + "/" + odataOpFrom(this) + "()";
-        }
         var prefix = context.prefix;
         if (prefix) {
           exprVal = prefix + "/" + exprVal;

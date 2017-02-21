@@ -2,11 +2,11 @@
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -112,7 +112,7 @@
     }
 
     // Add query params if .withParameters was used
-    if (!core.isEmpty(mappingContext.query.parameters)) {
+    if (mappingContext.query.parameters) {
       var paramString = toQueryString(mappingContext.query.parameters);
       var sep = url.indexOf("?") < 0 ? "?" : "&";
       url = url + sep + paramString;
@@ -120,7 +120,7 @@
 
     OData.read({
           requestUri: url,
-          headers: core.extend({}, this.headers)
+          headers: this.headers
         },
         function (data, response) {
           var inlineCount;
@@ -162,14 +162,11 @@
       url = this.getAbsoluteUrl(dataService, '$metadata');
     }
 
-    var mheaders = core.extend({}, this.headers);
-    mheaders.Accept = 'application/*; odata.metadata=full';
-
     // OData.read(url,
     OData.read({
           requestUri: url,
           // headers: { "Accept": "application/json"}
-          headers: mheaders
+          headers: { Accept: 'application/json;odata.metadata=full' }
         },
         function (data) {
           // data.dataServices.schema is an array of schemas. with properties of
@@ -228,7 +225,7 @@
     var contentKeys = saveContext.contentKeys;
 
     OData.request({
-      headers: core.extend({}, this.headers),
+      headers: { "DataServiceVersion": "2.0" },
       requestUri: url,
       method: "POST",
       data: requestData

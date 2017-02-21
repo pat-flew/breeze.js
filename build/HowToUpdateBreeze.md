@@ -1,15 +1,5 @@
 # How to release a new version of breeze.js client
 
-Before starting, get the latest from the following github repositories:
-
- - breeze.js
- - bower-breeze-client
- - breeze.server.node
- - breeze.server.net
- - breeze.github.io
- 
- Also make sure you have user access in npm and have installed the nuget API key.
-
 ## breeze.js
 
 1. Update and test, test, test
@@ -42,6 +32,6 @@ Before starting, get the latest from the following github repositories:
 
 1. Update `breeze.github.io/doc-js/release-notes.md` with version information
 1. Make a zip file, `breeze-client-x.x.x.zip` in breeze.js/build and copy it to breeze.github.io/downloads
-1. Update `breeze.github.io/doc-js/download.html` with new zip file link (line 9 and 10)
+1. Update `breeze.github.io/doc-js/download.html` with new zip file link (line 9)
 1. Update `breeze.github.io/doc-js/download.html` with commit SHA (line 31 and 32) from https://github.com/Breeze/breeze.js
 

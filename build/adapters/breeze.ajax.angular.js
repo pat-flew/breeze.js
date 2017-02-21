@@ -5,11 +5,11 @@
   if (typeof breeze === "object") {
     factory(breeze);
   } else if (typeof require === "function" && typeof exports === "object" && typeof module === "object") {
-    // CommonJS or Node: hard-coded dependency on "breeze-client"
+    // CommonJS or Node: hard-coded dependency on "breeze"
     factory(require("breeze-client"));
   } else if (typeof define === "function" && define["amd"]) {
-    // AMD anonymous module with hard-coded dependency on "breeze-client"
-    define(["breeze-client"], factory);
+    // AMD anonymous module with hard-coded dependency on "breeze"
+    define(["breeze"], factory);
   }
 }(function (breeze) {
   "use strict";
@@ -85,9 +85,7 @@
       config: ngConfig,   // angular's $http configuration object
       dsaConfig: config,  // the config arg from the calling Breeze DataServiceAdapter
       success: successFn, // adapter's success callback
-      error: errorFn,     // adapter's error callback
-      responseSuccess: responseSuccessFn, // adapter's success callback (ng 1.6+)
-      responseError: responseErrorFn      // adapter's error callback (ng 1.6+)
+      error: errorFn      // adapter's error callback
     }
 
     if (core.isFunction(this.requestInterceptor)) {
@@ -98,19 +96,10 @@
     }
 
     if (requestInfo.config) { // exists unless requestInterceptor killed it.
-      var prom = this.$http(requestInfo.config);
-      if (prom.success) {
-        // response for ng < 1.6        
-        prom.success(requestInfo.success).error(requestInfo.error);
-      } else {
-        // response for ng 1.6+
-        prom.then(requestInfo.responseSuccess).catch(requestInfo.responseError);
-      }
+      this.$http(requestInfo.config)
+          .success(requestInfo.success)
+          .error(requestInfo.error);
       this.$rootScope && this.$rootScope.$digest();
-    }
-
-    function responseSuccessFn(response) {
-      return successFn(response.data, response.status, response.headers, response.config, response.statusText);
     }
 
     function successFn(data, status, headers, xconfig, statusText) {
@@ -125,10 +114,6 @@
         statusText: statusText
       };
       config.success(httpResponse);
-    }
-
-    function responseErrorFn(response) {
-      return errorFn(response.data, response.status, response.headers, response.config, response.statusText);
     }
 
     function errorFn(data, status, headers, xconfig, statusText) {
